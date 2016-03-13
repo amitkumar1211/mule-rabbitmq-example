@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns="http://www.mulesoft.org/schema/mule/core"
+      xmlns:amqp="http://www.mulesoft.org/schema/mule/amqp"
+      xmlns:http="http://www.mulesoft.org/schema/mule/http"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="
+        http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+        http://www.mulesoft.org/schema/mule/amqp http://www.mulesoft.org/schema/mule/amqp/current/mule-amqp.xsd
+        http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd">
+
+  <amqp:connector name="amqpConnector"
+                  host="localhost"
+                  ackMode="MANUAL"
+                  prefetchCount="100"/>
+
+  <http:listener-config name="httpListener"
+                        host="localhost"
+                        port="8081"/>
+
+  <flow name="producer">
+    <http:listener config-ref="httpListener" path="/*"/>
+    <amqp:outbound-endpoint connector-ref="amqpConnector" queueName="NewUser"/>
+  </flow>
+
+  <flow name="consumer">
+    <amqp:inbound-endpoint connector-ref="amqpConnector" queueName="NewUser"/>
+    <expression-component>
+      Thread.sleep(1000);
+      flowVars['number'] = Math.random() * 100 + 1;
+    </expression-component>
+    <logger level="INFO" message="#[message.payloadAs(java.lang.String)]"/>
+    <choice>
+      <when expression="#[flowVars['number'] &lt; 50]">
+        <amqp:acknowledge-message/>
+      </when>
+      <otherwise>
+        <logger level="INFO" message="message rejected"/>
+        <amqp:reject-message requeue="true"/>
+      </otherwise>
+    </choice>
+  </flow>
+
+</mule>
